@@ -10,18 +10,20 @@
 // Only keep the most recent builds.
 properties([[$class: 'jenkins.model.BuildDiscarderProperty', strategy: [$class: 'LogRotator', numToKeepStr: '10',
                                                                         artifactNumToKeepStr: '20']]])
-def PRE_CONFIGURED_GLOBAL_TOOL_JDK_ID   = 'Jdk_8u40'
+def PRE_CONFIGURED_GLOBAL_TOOL_JDK_ID   = 'JDK8'
+def PRE_CONFIGURED_GLOBAL_TOOL_MVN_ID   = 'Maven_3.2.2'
 
 node{
         //prints timestamps
-        wrap([$class: 'TimestamperBuildWrapper']) {
+      //  wrap([$class: 'TimestamperBuildWrapper']) {
             // The names here are currently aligned with Ambari default of version 2.4. This needs to be made more flexible.
             // Using the "tool" Workflow call automatically installs those tools on the node.
             String jdktool = tool PRE_CONFIGURED_GLOBAL_TOOL_JDK_ID
+            String mvntool = tool PRE_CONFIGURED_GLOBAL_TOOL_MVN_ID
 
             // Set JAVA_HOME, MAVEN_HOME and special PATH variables for the tools we're  using.
             List buildEnv = ["PATH+JDK=${jdktool}/bin", "JAVA_HOME=${jdktool}",
-                        "JAVA_OPTS=-Xmx1536m -Xms512m -XX:MaxPermSize=1024m", "MAVEN_OPTS=-Xmx1536m -Xms512m -XX:MaxPermSize=1024m "]
+                        "JAVA_OPTS=-Xmx1536m -Xms512m -XX:MaxPermSize=1024m","MAVEN_HOME=${mvntool}", "MAVEN_OPTS=-Xmx1536m -Xms512m -XX:MaxPermSize=1024m"]
 
             // First stage is actually checking out the source. Since we're using Multibranch currently, we can use "checkout scm".
             stage "Get Latest Source"
@@ -51,12 +53,12 @@ node{
             step([$class: 'ArtifactArchiver', artifacts: '**/target/*.jar, **/target/*.tar.gz', fingerprint: true])
             step([$class: 'JUnitResultArchiver', healthScaleFactor: 20.0, testResults: '**/target/surefire-reports/*.xml'])
 
-            stage "Quality Assurance"
+            /* stage "Quality Assurance"
             timeout(time: 15, unit: 'MINUTES') {
                 withEnv(buildEnv) {
                     sh "./mvnw sonar:sonar -V -B " //-Dmaven.repo.local=${pwd()}/.repository"
                 }
-            }
+            }*/
             if (currentBuild.result == null) {
                 //Build yet not failed
                 stage "Release Actions"
@@ -68,7 +70,7 @@ node{
                         if (env.BRANCH_NAME.startsWith("develop")) {
                             echo "Developer can : start a Feature manually using :  ./mvnw clean jgitflow:feature-start -V -B"
                             input message: v + ' : Want to star new Release ?'
-                            sh "./mvnw clean jgitflow:release-start -V -B"
+                            sh "./mvnw clean jgitflow:release-start -V -B -X"
                         } else if (env.BRANCH_NAME.startsWith("release")) {
                             input message: v + ' : Finish Release ?'
                             sh "./mvnw clean jgitflow:release-finish -V -B " //-Dmaven.repo.local=${pwd()}/.repository"
@@ -92,7 +94,7 @@ node{
             }
             final def RECIPIENTS = emailextrecipients([ [$class: 'DevelopersRecipientProvider'], [$class: 'CulpritsRecipientProvider'] ])
             step([$class: 'Mailer', notifyEveryUnstableBuild: true, sendToIndividuals: true, recipients: RECIPIENTS])
-        }
+      //  }
 }
 
 def versionOfProject() {
